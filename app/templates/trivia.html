@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block pagetitle %}AI Trivia Battle{% endblock %}
+{% block head %}
+<style>
+  .topics{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+  .loader{text-align:center;padding:50px 10px}
+  .orb{width:90px;height:90px;margin:0 auto 24px;border-radius:50%;background:conic-gradient(var(--pink),var(--cyan),var(--lime),var(--pink));animation:spin 1.2s linear infinite;-webkit-mask:radial-gradient(circle,transparent 55%,#000 56%);mask:radial-gradient(circle,transparent 55%,#000 56%)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .qtop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 18px}
+  .progress{height:10px;border-radius:99px;background:#ffffff14;overflow:hidden;margin-top:8px}
+  .progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--pink),var(--cyan));transition:width .4s}
+  .timer{position:relative;width:62px;height:62px;flex:none}
+  .timer svg{transform:rotate(-90deg)}
+  .timer b{position:absolute;inset:0;display:grid;place-items:center;font-family:Orbitron;font-size:18px}
+  .question{font-size:clamp(19px,2.6vw,24px);font-weight:700;line-height:1.35;margin:6px 0 20px}
+  .options{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .opt{text-align:left;padding:16px;border-radius:14px;border:1px solid var(--line);background:#ffffff08;color:var(--text);font-size:16px;cursor:pointer;transition:.15s;display:flex;gap:12px;align-items:center;font-family:inherit}
+  .opt span{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:#ffffff14;font-family:Orbitron;font-size:13px}
+  .opt:hover:not(:disabled){border-color:var(--cyan);transform:translateY(-2px)}
+  .opt.correct{border-color:var(--lime);background:#9dff5c22;box-shadow:0 0 18px #9dff5c44}
+  .opt.wrong{border-color:var(--red);background:#ff547022;animation:shake .35s}
+  .opt:disabled{cursor:default}
+  @keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  .explain{margin-top:16px;padding:14px 16px;border-radius:12px;background:#22e4ff14;border:1px solid #22e4ff44;color:#cdf7ff}
+  .scoreline{font-family:Orbitron;font-size:14px;color:var(--muted)}
+  .scoreline b{color:var(--amber);font-size:18px}
+  .result{text-align:center;padding:20px 0}
+  .big{font-family:Orbitron;font-size:clamp(48px,10vw,80px);font-weight:800;background:linear-gradient(90deg,var(--amber),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}
+  .stat{padding:14px;border-radius:12px;background:#ffffff08;border:1px solid var(--line)}
+  .stat b{display:block;font-family:Orbitron;font-size:22px}.stat small{color:var(--muted)}
+  @media (max-width:560px){ .options{grid-template-columns:1fr} .stats{gap:6px} .stat b{font-size:18px} }
+</style>
+{% endblock %}
+{% block content %}
+<div class="grid">
+  <section class="panel">
+    <div id="start">
+      <h1>Pick a topic.<br><span class="grad">AI writes the quiz.</span></h1>
+      <p class="sub">5 questions · {{ timer }} seconds each · faster answers score more.</p>
+      <label for="name">Player name</label>
+      <input id="name" maxlength="20" placeholder="Your name" autocomplete="off">
+      <label>Topic</label>
+      <div class="topics" id="topics"></div>
+      <input id="custom" maxlength="60" placeholder="…or type any topic (Kubernetes, Tamil cinema, Cricket)" style="margin-top:10px" autocomplete="off">
+      <label>Difficulty</label>
+      <div class="row" id="diffs">
+        <button class="pick" data-d="easy">Easy</button>
+        <button class="pick active" data-d="medium">Medium</button>
+        <button class="pick" data-d="hard">Hard</button>
+      </div>
+      <button class="btn" id="play">START BATTLE</button>
+    </div>
+
+    <div id="loading" class="loader hidden">
+      <div class="orb"></div>
+      <h1 style="font-size:22px">Bedrock is writing your questions…</h1>
+      <p class="sub" id="loadingTopic"></p>
+    </div>
+
+    <div id="quiz" class="hidden">
+      <div id="badge"></div>
+      <div class="qtop">
+        <div style="flex:1">
+          <div class="scoreline">Question <b id="qn">1</b>/5 · Score <b id="score">0</b></div>
+          <div class="progress"><i id="bar"></i></div>
+        </div>
+        <div class="timer">
+          <svg width="62" height="62"><circle cx="31" cy="31" r="26" stroke="#ffffff18" stroke-width="6" fill="none"/>
+            <circle id="ring" cx="31" cy="31" r="26" stroke="url(#g)" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="163.4" stroke-dashoffset="0"/>
+            <defs><linearGradient id="g"><stop offset="0" stop-color="#ff3fa4"/><stop offset="1" stop-color="#22e4ff"/></linearGradient></defs></svg>
+          <b id="tleft">{{ timer }}</b>
+        </div>
+      </div>
+      <div class="question" id="qtext"></div>
+      <div class="options" id="opts"></div>
+      <div class="explain hidden" id="explain"></div>
+      <button class="btn hidden" id="next">NEXT ➜</button>
+    </div>
+
+    <div id="result" class="result hidden">
+      <p class="sub" style="margin:0">Final score</p>
+      <div class="big" id="final">0</div>
+      <div class="stats">
+        <div class="stat"><b id="rc">0/5</b><small>Correct</small></div>
+        <div class="stat"><b id="rr">#—</b><small>Rank</small></div>
+        <div class="stat"><b id="rt">—</b><small>Topic</small></div>
+      </div>
+      <button class="btn" id="again">PLAY AGAIN</button>
+      <a class="btn ghost" href="/pong" style="margin-top:10px">TRY AI PONG</a>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <h2><span class="live"></span>Trivia leaderboard</h2>
+    <p class="sub" style="font-size:13px">Stored in Redis — shared by every server.</p>
+    <ol class="board" id="board"></ol>
+    <div class="cache">
+      <div>Cache hits <b id="hits">0</b></div>
+      <div>AI calls (misses) <b id="miss">0</b></div>
+      <div>Items in cache <b id="ct">0</b></div>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const TIMER = {{ timer }};
+const TOPICS = ["☁️ AWS Cloud","🐳 Docker","🏏 Cricket","🎬 Movies","🌍 Geography","🔬 Science","🛡️ Cybersecurity","🐍 Python"];
+const state = {topic:"", difficulty:"medium", quiz:null, i:0, score:0, answers:[], timer:null, left:TIMER, name:"", busy:false};
+
+TOPICS.forEach(t => {
+  const b = document.createElement("button");
+  b.className = "pick"; b.textContent = t;
+  b.onclick = () => { document.querySelectorAll("#topics .pick").forEach(x=>x.classList.remove("active")); b.classList.add("active"); $("custom").value=""; state.topic = t.replace(/^\S+\s/,""); };
+  $("topics").appendChild(b);
+});
+$("custom").oninput = e => { document.querySelectorAll("#topics .pick").forEach(x=>x.classList.remove("active")); state.topic = e.target.value.trim(); };
+document.querySelectorAll("#diffs .pick").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#diffs .pick").forEach(x=>x.classList.remove("active")); b.classList.add("active"); state.difficulty = b.dataset.d;
+});
+$("name").value = getName();
+
+function show(id){ ["start","loading","quiz","result"].forEach(s => $(s).classList.toggle("hidden", s!==id)); window.scrollTo({top:0, behavior:"smooth"}); }
+
+$("play").onclick = async () => {
+  state.name = $("name").value.trim() || "Player";
+  if(!state.topic){ alert("Pick or type a topic first"); return; }
+  setName(state.name);
+  $("loadingTopic").textContent = `${state.topic} · ${state.difficulty}`;
+  show("loading");
+  try{
+    const q = await api("/api/questions", {topic:state.topic, difficulty:state.difficulty});
+    Object.assign(state, {quiz:q, i:0, score:0, answers:[]});
+    $("badge").innerHTML = q.cached
+      ? `<span class="badge hit">⚡ CACHE HIT · ${q.ms} ms · from Redis</span>`
+      : `<span class="badge miss">🤖 AI GENERATED · ${q.ms} ms · now cached</span>`;
+    $("srv").textContent = q.served_by;
+    show("quiz"); renderQ(); refreshStats();
+  }catch(e){ alert(e.message); show("start"); }
+};
+
+function renderQ(){
+  const q = state.quiz.questions[state.i];
+  state.busy = false;
+  $("qn").textContent = state.i+1; $("score").textContent = state.score;
+  $("bar").style.width = (state.i/5*100)+"%";
+  $("qtext").textContent = q.question;
+  $("opts").innerHTML = q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span>${"ABCD"[k]}</span>${esc(o)}</button>`).join("");
+  document.querySelectorAll(".opt").forEach(b => b.onclick = () => choose(+b.dataset.k));
+  $("explain").classList.add("hidden"); $("next").classList.add("hidden");
+  startTimer();
+}
+function startTimer(){
+  clearInterval(state.timer); state.left = TIMER; tick();
+  state.timer = setInterval(() => { state.left--; tick(); if(state.left<=0){ clearInterval(state.timer); choose(-1); } }, 1000);
+}
+function tick(){
+  $("tleft").textContent = Math.max(state.left,0);
+  $("ring").style.strokeDashoffset = 163.4 * (1 - Math.max(state.left,0)/TIMER);
+}
+async function choose(k){
+  if(state.busy) return; state.busy = true;
+  clearInterval(state.timer);
+  document.querySelectorAll(".opt").forEach(b => b.disabled = true);
+  const timeLeft = Math.max(state.left,0);
+  state.answers.push({choice:k, time_left:timeLeft});
+  try{
+    const res = await api("/api/answer", {quiz_id:state.quiz.quiz_id, index:state.i, choice:k});
+    const btns = document.querySelectorAll(".opt");
+    btns[res.correct].classList.add("correct");
+    if(k>=0 && !res.is_correct) btns[k].classList.add("wrong");
+    if(res.is_correct){ state.score += 100 + timeLeft*5; $("score").textContent = state.score; }
+    $("explain").innerHTML = (k<0 ? "⏰ Time's up! " : res.is_correct ? "✅ Correct! " : "❌ Not quite. ") + esc(res.explanation);
+    $("explain").classList.remove("hidden");
+    $("next").textContent = state.i===4 ? "SEE RESULTS ➜" : "NEXT ➜";
+    $("next").classList.remove("hidden");
+  }catch(e){ alert(e.message); show("start"); }
+}
+$("next").onclick = () => { state.i++; state.i<5 ? renderQ() : finish(); };
+async function finish(){
+  $("bar").style.width = "100%";
+  try{
+    const res = await api("/api/trivia/submit", {name:state.name, quiz_id:state.quiz.quiz_id, answers:state.answers});
+    $("final").textContent = res.score;
+    $("rc").textContent = `${res.correct}/${res.total}`;
+    $("rr").textContent = res.rank ? "#"+res.rank : "—";
+    $("rt").textContent = state.quiz.topic.length>12 ? state.quiz.topic.slice(0,11)+"…" : state.quiz.topic;
+    show("result"); board();
+  }catch(e){ alert(e.message); show("start"); }
+}
+$("again").onclick = () => show("start");
+function board(){ renderBoard("trivia", $("board"), state.name || getName()); }
+board(); setInterval(board, 5000);
+</script>
+{% endblock %}

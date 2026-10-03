@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block pagetitle %}Home{% endblock %}
+{% block head %}
+<style>
+  .hero{text-align:center;padding:28px 0 36px}
+  .eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);padding:6px 12px;border:1px solid #22e4ff55;border-radius:999px;margin-bottom:18px}
+  .hero h1{font-size:clamp(32px,7vw,64px)}
+  .hero p{color:var(--muted);max-width:620px;margin:0 auto;font-size:clamp(15px,2vw,18px)}
+  .games{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .game{position:relative;overflow:hidden;display:flex;flex-direction:column;text-decoration:none;transition:.2s}
+  .game:hover{transform:translateY(-4px);border-color:var(--cyan);box-shadow:0 12px 40px #22e4ff22}
+  .art{height:170px;border-radius:14px;margin-bottom:18px;position:relative;overflow:hidden;background:#0b0820;border:1px solid var(--line)}
+  .game h2{font-size:22px;margin-bottom:6px}
+  .game p{color:var(--muted);flex:1}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+  .tag{font-size:12px;padding:4px 10px;border-radius:999px;background:#ffffff0d;color:var(--muted)}
+  .game .btn{margin-top:18px}
+  /* trivia art */
+  .q{position:absolute;left:18px;right:18px;height:30px;border-radius:9px;border:1px solid var(--line);background:#ffffff08}
+  .q:nth-child(1){top:22px;height:24px;width:70%;border:0;background:linear-gradient(90deg,#ff3fa455,#22e4ff33)}
+  .q:nth-child(2){top:62px;width:42%}.q:nth-child(3){top:62px;left:auto;width:42%;border-color:var(--lime);background:#9dff5c22;box-shadow:0 0 18px #9dff5c44}
+  .q:nth-child(4){top:104px;width:42%}.q:nth-child(5){top:104px;left:auto;width:42%}
+  .ring{position:absolute;right:18px;top:16px;width:36px;height:36px;border-radius:50%;border:4px solid #ffffff18;border-top-color:var(--pink);animation:spin 1.6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* pong art */
+  .net{position:absolute;left:50%;top:10px;bottom:10px;border-left:3px dashed #ffffff22}
+  .pad{position:absolute;width:10px;height:56px;border-radius:6px}
+  .pad.l{left:16px;background:var(--cyan);box-shadow:0 0 16px var(--cyan);animation:padl 2.4s ease-in-out infinite}
+  .pad.r{right:16px;background:var(--pink);box-shadow:0 0 16px var(--pink);animation:padr 2.4s ease-in-out infinite}
+  .ball{position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 18px #fff;animation:ball 2.4s linear infinite}
+  @keyframes padl{0%,100%{top:20px}50%{top:90px}}
+  @keyframes padr{0%,100%{top:90px}50%{top:24px}}
+  @keyframes ball{0%{left:28px;top:44px}50%{left:calc(100% - 42px);top:50px}100%{left:28px;top:44px}}
+  /* how it works */
+  .how{margin-top:20px}
+  .steps{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:16px}
+  .step{padding:14px;border-radius:14px;background:#ffffff08;border:1px solid var(--line);position:relative}
+  .step b{display:block;font-size:14px}
+  .step small{color:var(--muted);font-size:12.5px}
+  .step i{font-style:normal;font-family:Orbitron;font-size:12px;color:var(--cyan)}
+  .boards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}
+  @media (max-width:900px){ .steps{grid-template-columns:1fr 1fr} }
+  @media (max-width:700px){ .games,.boards{grid-template-columns:1fr} .steps{grid-template-columns:1fr} }
+</style>
+{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="eyebrow">{{ title }} · Live on AWS</div>
+  <h1>Play games.<br><span class="grad">Powered by AI.</span></h1>
+  <p>Two games, one cloud. Amazon Bedrock writes your quiz and coaches your matches, Redis makes it instant, and one EC2 server shares it with everyone in the room.</p>
+</section>
+
+<section class="games">
+  <a class="panel game" href="/trivia">
+    <div class="art"><div class="q"></div><div class="q"></div><div class="q"></div><div class="q"></div><div class="q"></div><div class="ring"></div></div>
+    <h2>AI Trivia Battle</h2>
+    <p>Pick any topic. AI writes 5 fresh questions in seconds. Answer fast for bonus points.</p>
+    <div class="tags"><span class="tag">Bedrock writes questions</span><span class="tag">Redis cache</span><span class="tag">20 s timer</span></div>
+    <span class="btn">PLAY TRIVIA</span>
+  </a>
+  <a class="panel game" href="/pong">
+    <div class="art"><div class="net"></div><div class="pad l"></div><div class="pad r"></div><div class="ball"></div></div>
+    <h2>AI Pong</h2>
+    <p>Beat the computer to 7 points. After every match an AI coach reviews your game and gives you a tip.</p>
+    <div class="tags"><span class="tag">Touch, mouse or keys</span><span class="tag">AI coach</span><span class="tag">3 levels</span></div>
+    <span class="btn">PLAY PONG</span>
+  </a>
+</section>
+
+<section class="panel how">
+  <h2>What happens when you press play</h2>
+  <div class="steps">
+    <div class="step"><i>01</i><b>Your phone</b><small>opens the site over HTTPS (free certificate)</small></div>
+    <div class="step"><i>02</i><b>Route 53</b><small>turns www.naeem.org.in into the server's IP</small></div>
+    <div class="step"><i>03</i><b>EC2 + Docker</b><small>Caddy passes the request to the game app</small></div>
+    <div class="step"><i>04</i><b>Redis cache</b><small>answers instantly if someone asked the same before</small></div>
+    <div class="step"><i>05</i><b>Bedrock</b><small>Amazon Nova creates new content only on a cache miss</small></div>
+  </div>
+  <div class="cache" style="grid-template-columns:repeat(3,1fr);display:grid;gap:10px">
+    <div style="display:block">Cache hits<br><b id="hits">0</b></div>
+    <div style="display:block">AI calls<br><b id="miss">0</b></div>
+    <div style="display:block">Items cached<br><b id="ct">0</b></div>
+  </div>
+</section>
+
+<section class="boards">
+  <div class="panel"><h2><span class="live"></span>Trivia leaders</h2><p class="sub" style="font-size:13px">Best score per player</p><ol class="board" id="lbt"></ol></div>
+  <div class="panel"><h2><span class="live"></span>Pong leaders</h2><p class="sub" style="font-size:13px">Best score per player</p><ol class="board" id="lbp"></ol></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+function boards(){ renderBoard("trivia", $("lbt"), getName()); renderBoard("pong", $("lbp"), getName()); }
+boards(); setInterval(boards, 5000);
+</script>
+{% endblock %}

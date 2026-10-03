@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block pagetitle %}AI Pong{% endblock %}
+{% block head %}
+<style>
+  /* Court: landscape 8:5 on laptops and sideways phones, upright 5:8 on portrait phones.
+     Width is capped by screen height so the whole court is always visible. */
+  .court{position:relative;margin:0 auto;aspect-ratio:8/5;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#070514;touch-action:none;user-select:none;-webkit-user-select:none;
+         width:min(100%, calc((100vh - 150px) * 1.6)); width:min(100%, calc((100svh - 150px) * 1.6))}
+  @media (orientation:portrait) and (max-width:700px){
+    .court{aspect-ratio:5/8;width:min(100%, calc((100vh - 200px) * .625));width:min(100%, calc((100svh - 200px) * .625))}
+    .landscape-only{display:none}
+  }
+  @media (orientation:landscape), (min-width:701px){ .portrait-only{display:none} }
+  .court canvas{width:100%;height:100%;display:block;cursor:none}
+  .msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;pointer-events:none;font-family:Orbitron;font-weight:800;font-size:clamp(26px,7vw,64px);text-shadow:0 0 24px var(--pink)}
+  .hud{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 auto 10px;font-size:13px;color:var(--muted)}
+  .hud b{color:var(--text);font-family:Orbitron}
+  .score{font-family:Orbitron;font-size:20px;font-weight:800;letter-spacing:2px}
+  .score .you{color:var(--cyan)}.score .cpu{color:var(--pink)}
+  .hint{font-size:13px;color:var(--muted);margin-top:10px;text-align:center}
+  @media (max-width:640px){ #game .hud{font-size:12px} #game{margin:-6px -6px 0} }
+  .card{margin-top:16px;padding:20px;border-radius:16px;background:#ffffff08;border:1px solid var(--line)}
+  .verdict{font-family:Orbitron;font-weight:800;font-size:clamp(28px,6vw,44px)}
+  .verdict.win{color:var(--lime);text-shadow:0 0 20px #9dff5c66}.verdict.lose{color:var(--pink)}
+  .coach{margin-top:14px;padding:16px;border-radius:12px;background:#22e4ff14;border:1px solid #22e4ff44;color:#cdf7ff;min-height:56px}
+  .coach small{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px;font-weight:700}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .stat{padding:12px;border-radius:12px;background:#ffffff08;border:1px solid var(--line);text-align:center}
+  .stat b{display:block;font-family:Orbitron;font-size:20px}.stat small{color:var(--muted)}
+  .dots::after{content:"";animation:dots 1.2s steps(4) infinite}
+  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="grid">
+  <section class="panel">
+    <div id="setup">
+      <h1>AI Pong<br><span class="grad">first to 7 wins.</span></h1>
+      <p class="sub">You are the <b style="color:var(--cyan)">cyan</b> paddle: <span class="landscape-only">on the left</span><span class="portrait-only">at the bottom</span>. After the match, an AI coach on Amazon Bedrock reviews your game.</p>
+      <label for="name">Player name</label>
+      <input id="name" maxlength="20" placeholder="Your name" autocomplete="off">
+      <label>Computer level</label>
+      <div class="row" id="diffs">
+        <button class="pick" data-d="easy">Easy</button>
+        <button class="pick active" data-d="medium">Medium</button>
+        <button class="pick" data-d="hard">Hard</button>
+      </div>
+      <button class="btn" id="start">START MATCH</button>
+      <p class="hint"><span class="portrait-only">Slide your thumb left and right on the court. Works sideways too.</span><span class="landscape-only">Phone: drag on the court · Laptop: move the mouse or use ↑ ↓ / W S</span></p>
+    </div>
+
+    <div id="game" class="hidden">
+      <div class="hud">
+        <span class="score"><span class="you" id="sp">0</span> : <span class="cpu" id="sc">0</span></span>
+        <span>Rally <b id="rally">0</b> · Best <b id="best">0</b> · <b id="lvl">Medium</b></span>
+        <button class="pick" id="quit" style="padding:6px 12px;font-size:13px">Quit</button>
+      </div>
+      <div class="court" id="court"><canvas id="cv"></canvas><div class="msg" id="msg"></div></div>
+    </div>
+
+    <div id="over" class="hidden">
+      <div class="card">
+        <div class="verdict" id="verdict"></div>
+        <div class="stats">
+          <div class="stat"><b id="fs">0–0</b><small>Score</small></div>
+          <div class="stat"><b id="pts">0</b><small>Points</small></div>
+          <div class="stat"><b id="rk">#—</b><small>Rank</small></div>
+        </div>
+        <div id="cbadge" style="margin-top:14px"></div>
+        <div class="coach"><small>AI coach · Amazon Bedrock</small><span id="coach" class="dots">Reviewing your match</span></div>
+        <button class="btn" id="again">PLAY AGAIN</button>
+        <a class="btn ghost" href="/trivia" style="margin-top:10px">TRY AI TRIVIA</a>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <h2><span class="live"></span>Pong leaderboard</h2>
+    <p class="sub" style="font-size:13px">Points = goals ×100 + longest rally ×10 + 300 for a win, × level.</p>
+    <ol class="board" id="board"></ol>
+    <div class="cache">
+      <div>Cache hits <b id="hits">0</b></div>
+      <div>AI calls (misses) <b id="miss">0</b></div>
+      <div>Items in cache <b id="ct">0</b></div>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// ---------- settings ----------
+const W = 800, H = 500, PW = 12, PH = 90, R = 9, WIN = 7;
+const LEVELS = {
+  easy:   {cpu:250, err:34, start:360},
+  medium: {cpu:380, err:18, start:420},
+  hard:   {cpu:540, err:6,  start:480},
+};
+const cv = $("cv"), ctx = cv.getContext("2d");
+let level = "medium", name = "", running = false, raf = 0, last = 0;
+let g = null;   // game state
+
+$("name").value = getName();
+document.querySelectorAll("#diffs .pick").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#diffs .pick").forEach(x => x.classList.remove("active"));
+  b.classList.add("active"); level = b.dataset.d;
+});
+function show(id){ ["setup","game","over"].forEach(s => $(s).classList.toggle("hidden", s !== id)); }
+
+// ---------- canvas sizing (sharp on every screen) ----------
+// The game always runs on an 800x500 sideways court. On a portrait phone the court is
+// drawn rotated: your paddle sits at the bottom and the computer's at the top.
+let portrait = false;
+function fit(){
+  const rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(rect.width * dpr); cv.height = Math.round(rect.height * dpr);
+  portrait = rect.height > rect.width;
+  if(portrait) ctx.setTransform(0, -cv.height / W, cv.width / H, 0, 0, cv.height);
+  else ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  if(g && !running) draw();
+}
+window.addEventListener("resize", () => { if(g) fit(); });
+
+// ---------- input ----------
+let keyUp = false, keyDown = false;
+function pointerY(e){
+  const r = cv.getBoundingClientRect();
+  return portrait ? (e.clientX - r.left) / r.width * H : (e.clientY - r.top) / r.height * H;
+}
+cv.addEventListener("pointermove", e => { if(g) g.target = pointerY(e); });
+cv.addEventListener("pointerdown", e => { if(g) g.target = pointerY(e); });
+const UP = ["ArrowUp","ArrowLeft","w","W","a","A"], DOWN = ["ArrowDown","ArrowRight","s","S","d","D"];
+addEventListener("keydown", e => {
+  if(!running) return;
+  if(UP.includes(e.key)){ keyUp = true; e.preventDefault(); }
+  if(DOWN.includes(e.key)){ keyDown = true; e.preventDefault(); }
+});
+addEventListener("keyup", e => {
+  if(UP.includes(e.key)) keyUp = false;
+  if(DOWN.includes(e.key)) keyDown = false;
+});
+const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch(e) {} };   // phone vibration (Android)
+document.addEventListener("visibilitychange", () => { if(document.hidden && g) g.pauseUntil = performance.now() + 1500; });
+
+// ---------- game ----------
+function newGame(){
+  const L = LEVELS[level];
+  g = {p:0, c:0, py:H/2-PH/2, cy:H/2-PH/2, target:H/2, ball:null, trail:[], rally:0, best:0,
+       speed:L.start, cpuErr:0, pauseUntil:0, serveDir:1, L};
+  $("sp").textContent = 0; $("sc").textContent = 0;
+  serve();
+}
+function serve(){
+  const L = g.L, ang = (Math.random()*50 - 25) * Math.PI/180;
+  g.ball = {x:W/2, y:H/2, vx:Math.cos(ang)*L.start*g.serveDir, vy:Math.sin(ang)*L.start};
+  g.speed = L.start; g.rally = 0; g.trail = [];
+  g.cpuErr = (Math.random()*2 - 1) * L.err;
+  g.pauseUntil = performance.now() + 900;
+  $("rally").textContent = 0;
+}
+function bounce(paddleY, toRight){
+  const rel = Math.max(-1, Math.min(1, (g.ball.y - (paddleY + PH/2)) / (PH/2)));
+  const ang = rel * 60 * Math.PI/180;
+  g.speed = Math.min(g.speed * 1.06, 950);
+  g.ball.vx = Math.cos(ang) * g.speed * (toRight ? 1 : -1);
+  g.ball.vy = Math.sin(ang) * g.speed;
+  g.rally++; g.best = Math.max(g.best, g.rally);
+  $("rally").textContent = g.rally; $("best").textContent = g.best;
+  if(!toRight) g.cpuErr = (Math.random()*2 - 1) * g.L.err;
+  else buzz(12);
+}
+function point(playerScored){
+  playerScored ? g.p++ : g.c++;
+  $("sp").textContent = g.p; $("sc").textContent = g.c;
+  if(!playerScored) buzz(80);
+  g.serveDir = playerScored ? 1 : -1;
+  if(g.p >= WIN || g.c >= WIN){ endGame(); return; }
+  flash(playerScored ? "POINT!" : "CPU SCORES");
+  serve();
+}
+let flashTimer = 0;
+function flash(text, ms = 800){ $("msg").textContent = text; clearTimeout(flashTimer); flashTimer = setTimeout(() => $("msg").textContent = "", ms); }
+
+function update(dt, now){
+  // player paddle: follows pointer smoothly, or keys
+  if(keyUp) g.target = g.py + PH/2 - 600*dt;
+  if(keyDown) g.target = g.py + PH/2 + 600*dt;
+  const want = Math.max(0, Math.min(H - PH, g.target - PH/2));
+  const step = 1600 * dt;
+  g.py += Math.max(-step, Math.min(step, want - g.py));
+
+  // computer paddle: chases the ball with a speed limit and a small aim error
+  const b = g.ball;
+  const aim = b.vx > 0 ? b.y + g.cpuErr : H/2;
+  const cstep = g.L.cpu * dt * (b.vx > 0 ? 1 : 0.5);
+  const cwant = Math.max(0, Math.min(H - PH, aim - PH/2));
+  g.cy += Math.max(-cstep, Math.min(cstep, cwant - g.cy));
+
+  if(now < g.pauseUntil) return;
+
+  const px = b.x;
+  b.x += b.vx * dt; b.y += b.vy * dt;
+  if(b.y - R < 0){ b.y = R; b.vy = Math.abs(b.vy); }
+  if(b.y + R > H){ b.y = H - R; b.vy = -Math.abs(b.vy); }
+
+  // player paddle face (left)
+  const pf = 24 + PW;
+  if(b.vx < 0 && px - R >= pf && b.x - R <= pf && b.y > g.py - R && b.y < g.py + PH + R){ b.x = pf + R; bounce(g.py, true); }
+  // cpu paddle face (right)
+  const cf = W - 24 - PW;
+  if(b.vx > 0 && px + R <= cf && b.x + R >= cf && b.y > g.cy - R && b.y < g.cy + PH + R){ b.x = cf - R; bounce(g.cy, false); }
+
+  g.trail.push({x:b.x, y:b.y}); if(g.trail.length > 10) g.trail.shift();
+  if(b.x < -R*2) point(false);
+  else if(b.x > W + R*2) point(true);
+}
+
+function draw(){
+  const grd = ctx.createLinearGradient(0, 0, W, H);
+  grd.addColorStop(0, "#0d0826"); grd.addColorStop(1, "#06121c");
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+  // net
+  ctx.strokeStyle = "rgba(255,255,255,.14)"; ctx.lineWidth = 4; ctx.setLineDash([14, 14]);
+  ctx.beginPath(); ctx.moveTo(W/2, 10); ctx.lineTo(W/2, H - 10); ctx.stroke(); ctx.setLineDash([]);
+  // scores (drawn upright in screen space so they read correctly on a portrait phone too)
+  if(portrait){
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const fs = Math.round(cv.width * 0.24);
+    ctx.font = `800 ${fs}px Orbitron, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255,63,164,.16)"; ctx.fillText(g.c, cv.width / 2, cv.height * 0.25);
+    ctx.fillStyle = "rgba(34,228,255,.16)"; ctx.fillText(g.p, cv.width / 2, cv.height * 0.75);
+    ctx.restore();
+  } else {
+    ctx.font = "800 88px Orbitron, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillStyle = "rgba(34,228,255,.18)"; ctx.fillText(g.p, W/2 - 90, 24);
+    ctx.fillStyle = "rgba(255,63,164,.18)"; ctx.fillText(g.c, W/2 + 90, 24);
+    ctx.font = "600 13px Inter, sans-serif"; ctx.fillStyle = "rgba(255,255,255,.35)";
+    ctx.fillText((name || "YOU").toUpperCase(), W/2 - 90, 118); ctx.fillText("CPU", W/2 + 90, 118);
+  }
+  // paddles
+  glowRect(24, g.py, "#22e4ff"); glowRect(W - 24 - PW, g.cy, "#ff3fa4");
+  // ball + trail
+  g.trail.forEach((t, i) => { ctx.fillStyle = `rgba(255,255,255,${(i+1)/g.trail.length*0.25})`; ctx.beginPath(); ctx.arc(t.x, t.y, R*(i+1)/g.trail.length, 0, 7); ctx.fill(); });
+  ctx.shadowColor = "#fff"; ctx.shadowBlur = 20; ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(g.ball.x, g.ball.y, R, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+}
+function glowRect(x, y, color){
+  ctx.shadowColor = color; ctx.shadowBlur = 22; ctx.fillStyle = color;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, PW, PH, 6) : ctx.rect(x, y, PW, PH); ctx.fill(); ctx.shadowBlur = 0;
+}
+function loop(now){
+  if(!running) return;
+  const dt = Math.min((now - last) / 1000, 1/30); last = now;
+  update(dt, now);
+  if(running) draw();
+  raf = requestAnimationFrame(loop);
+}
+
+// ---------- flow ----------
+$("start").onclick = () => {
+  name = $("name").value.trim() || "Player"; setName(name);
+  $("lvl").textContent = level[0].toUpperCase() + level.slice(1); $("best").textContent = 0;
+  show("game"); fit(); newGame();
+  running = true; last = performance.now();
+  flash("GET READY", 900);
+  raf = requestAnimationFrame(loop);
+  $("court").scrollIntoView({behavior:"smooth", block:"center"});
+};
+$("quit").onclick = () => { running = false; cancelAnimationFrame(raf); show("setup"); };
+$("again").onclick = () => show("setup");
+
+async function endGame(){
+  running = false; cancelAnimationFrame(raf); draw();
+  const won = g.p > g.c;
+  $("verdict").textContent = won ? "YOU WIN!" : "CPU WINS";
+  $("verdict").className = "verdict " + (won ? "win" : "lose");
+  $("fs").textContent = `${g.p}–${g.c}`; $("pts").textContent = "…"; $("rk").textContent = "#—";
+  $("coach").textContent = "Reviewing your match"; $("coach").className = "dots"; $("cbadge").innerHTML = "";
+  show("over");
+  try{
+    const res = await api("/api/pong/finish", {name, difficulty:level, player:g.p, cpu:g.c, rally:g.best});
+    $("pts").textContent = res.score; $("rk").textContent = res.rank ? "#" + res.rank : "—";
+    $("coach").className = ""; $("coach").textContent = res.coach;
+    $("cbadge").innerHTML = res.cached
+      ? `<span class="badge hit">⚡ CACHE HIT · ${res.ms} ms · from Redis</span>`
+      : `<span class="badge miss">🤖 AI GENERATED · ${res.ms} ms · now cached</span>`;
+    board(); refreshStats();
+  }catch(e){ $("coach").className = ""; $("coach").textContent = "Could not reach the AI coach: " + e.message; }
+}
+
+function board(){ renderBoard("pong", $("board"), name || getName()); }
+board(); setInterval(board, 5000);
+</script>
+{% endblock %}

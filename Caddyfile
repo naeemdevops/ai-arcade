@@ -1,0 +1,6 @@
+# Caddy web server: gets a free HTTPS certificate automatically (Let's Encrypt)
+# SITE_DOMAIN comes from .env:  ":80" on your laptop (plain http),  "www.naeem.org.in" on AWS (https)
+{$SITE_DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000
+}

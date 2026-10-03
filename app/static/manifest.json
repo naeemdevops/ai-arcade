@@ -1,0 +1,15 @@
+{
+  "name": "AI Game Arcade",
+  "short_name": "AI Arcade",
+  "description": "AI Trivia Battle and AI Pong, powered by Amazon Bedrock",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0820",
+  "theme_color": "#0b0820",
+  "icons": [
+    {"src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}

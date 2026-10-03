@@ -1,0 +1,40 @@
+services:
+  # Web server in front: handles http/https and the free certificate
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"        # on Windows, if port 80 is busy use "8080:80"
+      - "443:443"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  # The game website (Flask)
+  app:
+    build: .
+    image: ai-arcade:latest
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"   # only for health checks on the server itself
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Cache for AI answers + leaderboards
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
+  redis-data:

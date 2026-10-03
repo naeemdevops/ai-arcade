@@ -1,0 +1,7 @@
+# Keep Linux line endings even when committed from Windows
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.py text eol=lf
+*.html text eol=lf
+*.css text eol=lf

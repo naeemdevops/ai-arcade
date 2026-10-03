@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0820">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AI Arcade">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+<title>{% block pagetitle %}AI Arcade{% endblock %} · {{ title }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header>
+  <a class="logo" href="/">⚡ AI <span>ARCADE</span></a>
+  <nav>
+    <a href="/" class="{{ 'on' if request.path == '/' }}">Home</a>
+    <a href="/trivia" class="{{ 'on' if request.path == '/trivia' }}">Trivia</a>
+    <a href="/pong" class="{{ 'on' if request.path == '/pong' }}">Pong</a>
+  </nav>
+  <div class="chips">
+    <div class="chip">Server <b id="srv">—</b></div>
+    <div class="chip">AI <b id="ai">—</b></div>
+    <div class="chip">Cache hits <b id="hr">—</b></div>
+  </div>
+</header>
+
+<main>{% block content %}{% endblock %}</main>
+
+<footer>{{ title }} · Amazon Bedrock (Nova) · Redis · Docker · EC2 · Route 53 · HTTPS</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(path, body){
+  const res = await fetch(path, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {});
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+function getName(){ try { return localStorage.getItem("arcade_name") || ""; } catch(e) { return ""; } }
+function setName(n){ try { localStorage.setItem("arcade_name", n); } catch(e) {} }
+async function renderBoard(game, el, me){
+  try{
+    const lb = await api("/api/leaderboard/" + game);
+    el.innerHTML = lb.players.length
+      ? lb.players.map((p,i)=>`<li class="${p.name===me?'me':''}"><span class="rk">${i+1}</span><span class="nm">${esc(p.name)}</span><span class="sc">${p.score}</span></li>`).join("")
+      : `<div class="empty">No scores yet. Be the first!</div>`;
+  }catch(e){}
+}
+async function refreshStats(){
+  try{
+    const st = await api("/api/stats");
+    $("srv").textContent = st.served_by; $("ai").textContent = st.ai; $("hr").textContent = st.hit_rate + "%";
+    ["hits","miss","ct"].forEach((id,i) => { if($(id)) $(id).textContent = [st.hits, st.misses, st.cached_items][i]; });
+  }catch(e){}
+}
+refreshStats(); setInterval(refreshStats, 5000);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
